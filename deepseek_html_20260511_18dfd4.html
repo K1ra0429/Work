@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Лабораторная работа №5: Сборка простейшего электромагнита | 3D Симуляция</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Roboto', 'Microsoft YaHei', sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            pointer-events: none;
+            border-left: 5px solid #ffaa00;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-size: 14px;
+        }
+        #info h1 {
+            margin: 0 0 5px;
+            font-size: 1.2rem;
+        }
+        #info p {
+            margin: 0;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        #controls-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(30,30,40,0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 15px 25px;
+            color: white;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            z-index: 100;
+            pointer-events: auto;
+            font-family: monospace;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 16px;
+            border-radius: 40px;
+        }
+        .control-group label {
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        button {
+            background: #2c3e66;
+            border: none;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 1rem;
+        }
+        button:hover {
+            background: #1e2a4a;
+            transform: scale(1.02);
+        }
+        button.active {
+            background: #ffaa00;
+            color: #1e1e2a;
+            box-shadow: 0 0 12px rgba(255,170,0,0.6);
+        }
+        .status {
+            background: #000000aa;
+            padding: 6px 15px;
+            border-radius: 30px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .led {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: gray;
+            box-shadow: 0 0 4px currentColor;
+            transition: all 0.1s;
+        }
+        .led.on {
+            background-color: #ff3300;
+            box-shadow: 0 0 10px #ff3300;
+        }
+        .value {
+            color: #ffaa66;
+            font-weight: bold;
+        }
+        input {
+            width: 180px;
+            cursor: pointer;
+            accent-color: #ffaa00;
+        }
+        @media (max-width: 700px) {
+            .control-group { padding: 4px 10px; }
+            button { padding: 6px 12px; font-size: 0.8rem; }
+            .status { font-size: 0.8rem; }
+            input { width: 120px; }
+        }
+        #instruction {
+            position: absolute;
+            bottom: 90px;
+            right: 20px;
+            background: rgba(0,0,0,0.5);
+            color: #ddd;
+            font-size: 11px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>🧲 Лабораторная работа №5: Сборка простейшего электромагнита</h1>
+        <p>Сердечник (гвоздь) + медная проволока | Питание: батарея 4.5V | Испытание магнитного действия</p>
+    </div>
+    <div id="controls-panel">
+        <div class="control-group">
+            <span>🔌 Электромагнит:</span>
+            <button id="togglePowerBtn">🔴 ВКЛ/ВЫКЛ</button>
+            <div class="status">
+                <div id="powerLed" class="led"></div>
+                <span id="powerStatus">ВЫКЛЮЧЕН</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <span>⚡ Сила тока (вирт.):</span>
+            <input type="range" id="currentSlider" min="0" max="100" step="1" value="65">
+            <span id="currentVal" class="value">65%</span>
+        </div>
+        <div class="control-group">
+            <span>🧲 Поднести металл:</span>
+            <button id="activateTestBtn">🔩 ПРОВЕРИТЬ ПРИТЯЖЕНИЕ</button>
+        </div>
+        <div class="status">
+            <span>📊 Магнитная сила:</span>
+            <span id="forceMeter" class="value">0.00</span> <span>Н</span>
+        </div>
+    </div>
+    <div id="instruction">
+        🖱️ Мышь: вращать сцену | ПКМ: панорамировать | Колёсико: масштаб
+    </div>
+
+    <!-- Подключаем Three.js и вспомогательные библиотеки -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- Инициализация сцены ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050b1a);
+        scene.fog = new THREE.FogExp2(0x050b1a, 0.008);
+
+        // Камера
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(4, 3, 5);
+        camera.lookAt(0, 0, 0);
+
+        // Рендереры
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // тени для реализма
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.left = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        // Управление
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 1.5;
+        controls.zoomSpeed = 1.2;
+        controls.panSpeed = 0.8;
+        controls.enableZoom = true;
+        
+        // --- Освещение ---
+        // Ambient
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        scene.add(ambientLight);
+        // Main light
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        mainLight.position.set(3, 5, 2);
+        mainLight.castShadow = true;
+        mainLight.receiveShadow = false;
+        mainLight.shadow.mapSize.width = 1024;
+        mainLight.shadow.mapSize.height = 1024;
+        scene.add(mainLight);
+        // Fill light
+        const fillLight = new THREE.PointLight(0x445566, 0.5);
+        fillLight.position.set(-1, 2, 3);
+        scene.add(fillLight);
+        // Back rim light
+        const rimLight = new THREE.PointLight(0xffaa66, 0.4);
+        rimLight.position.set(0, 1, -3);
+        scene.add(rimLight);
+        
+        // Вспомогательная сетка и пол
+        const gridHelper = new THREE.GridHelper(8, 20, 0x88aaff, 0x335588);
+        gridHelper.position.y = -0.9;
+        gridHelper.material.transparent = true;
+        gridHelper.material.opacity = 0.4;
+        scene.add(gridHelper);
+        
+        const planeMat = new THREE.MeshStandardMaterial({ color: 0x111822, roughness: 0.7, metalness: 0.1 });
+        const groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), planeMat);
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.position.y = -0.92;
+        groundPlane.receiveShadow = true;
+        scene.add(groundPlane);
+        
+        // --- Создание модели электромагнита ---
+        const magnetGroup = new THREE.Group();
+        
+        // 1. Сердечник (гвоздь / металлический стержень)
+        const coreMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.85, roughness: 0.3, emissive: 0x000000 });
+        const coreCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 1.6, 32), coreMat);
+        coreCylinder.castShadow = true;
+        coreCylinder.receiveShadow = true;
+        coreCylinder.position.y = 0;
+        magnetGroup.add(coreCylinder);
+        
+        // Шляпка гвоздя (диск)
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xbb9966, metalness: 0.7, roughness: 0.4 });
+        const head = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.12, 24), headMat);
+        head.position.y = 0.86;
+        head.castShadow = true;
+        magnetGroup.add(head);
+        
+        // Острие (конус)
+        const tipMat = new THREE.MeshStandardMaterial({ color: 0xccaa77, metalness: 0.6 });
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.3, 16), tipMat);
+        tip.position.y = -0.88;
+        tip.castShadow = true;
+        magnetGroup.add(tip);
+        
+        // 2. Медная обмотка (катушка) - несколько колец
+        const wireMat = new THREE.MeshStandardMaterial({ color: 0xcc8844, metalness: 0.9, roughness: 0.2, emissive: 0x331100 });
+        const coilCount = 12;
+        for (let i = 0; i < coilCount; i++) {
+            const yPos = -0.55 + i * 0.105;
+            const ringGeo = new THREE.TorusGeometry(0.48, 0.08, 32, 64);
+            const ring = new THREE.Mesh(ringGeo, wireMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = yPos;
+            ring.castShadow = true;
+            magnetGroup.add(ring);
+        }
+        // Дополнительные витки по бокам для эстетики
+        const sideWireMat = new THREE.MeshStandardMaterial({ color: 0xdd9955, metalness: 0.85 });
+        for (let i = -1; i <= 1; i++) {
+            const loop = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.06, 24, 48), sideWireMat);
+            loop.rotation.x = Math.PI / 2;
+            loop.position.y = i * 0.4;
+            magnetGroup.add(loop);
+        }
+        
+        // Провода питания (красный и черный) идущие от основания
+        const wireRed = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.2, 6), new THREE.MeshStandardMaterial({ color: 0xcc3333, metalness: 0.2 }));
+        wireRed.position.set(0.65, -0.45, 0.45);
+        wireRed.rotation.z = 0.3;
+        wireRed.rotation.x = 0.2;
+        magnetGroup.add(wireRed);
+        
+        const wireBlack = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.2, 6), new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.3 }));
+        wireBlack.position.set(-0.65, -0.45, -0.4);
+        wireBlack.rotation.z = -0.2;
+        wireBlack.rotation.x = 0.1;
+        magnetGroup.add(wireBlack);
+        
+        // Клеммы/батарейка для красоты
+        const batteryBox = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.7), new THREE.MeshStandardMaterial({ color: 0xdd5533, metalness: 0.4, roughness: 0.5 }));
+        batteryBox.position.set(0.9, -0.85, 0.9);
+        batteryBox.castShadow = true;
+        scene.add(batteryBox);
+        
+        const batteryLabel = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.55), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2 }));
+        batteryLabel.position.set(0.9, -0.85, 0.9);
+        scene.add(batteryLabel);
+        
+        magnetGroup.position.y = 0.2;
+        scene.add(magnetGroup);
+        
+        // --- Эффекты: частицы магнитного поля и свечение ---
+        // Система частиц (магнитные искорки/силовые линии)
+        const particleCount = 400;
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            // начальные позиции вокруг сердечника
+            const radius = 0.7 + Math.random() * 1.2;
+            const angle = Math.random() * Math.PI * 2;
+            const y = (Math.random() - 0.5) * 1.8;
+            particlePositions[i*3] = Math.cos(angle) * radius;
+            particlePositions[i*3+1] = y;
+            particlePositions[i*3+2] = Math.sin(angle) * radius;
+        }
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        const particleMat = new THREE.PointsMaterial({ color: 0xff8844, size: 0.03, transparent: true, blending: THREE.AdditiveBlending });
+        const particleSystem = new THREE.Points(particlesGeometry, particleMat);
+        scene.add(particleSystem);
+        
+        // Дополнительный ореол вокруг полюсов (светящиеся сферы)
+        const glowMat = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0x442200, transparent: true, opacity: 0.3 });
+        const topGlow = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 16), glowMat);
+        topGlow.position.set(0, 1.05, 0);
+        scene.add(topGlow);
+        const bottomGlow = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), glowMat);
+        bottomGlow.position.set(0, -0.9, 0);
+        scene.add(bottomGlow);
+        
+        // CSS2D текст "Магнитное поле"
+        const fieldLabelDiv = document.createElement('div');
+        fieldLabelDiv.textContent = '🧲 МАГНИТНОЕ ПОЛЕ 🧲';
+        fieldLabelDiv.style.color = '#ffaa77';
+        fieldLabelDiv.style.fontSize = '14px';
+        fieldLabelDiv.style.fontWeight = 'bold';
+        fieldLabelDiv.style.textShadow = '0 0 5px rgba(0,0,0,0.5)';
+        fieldLabelDiv.style.background = 'rgba(0,0,0,0.5)';
+        fieldLabelDiv.style.padding = '2px 8px';
+        fieldLabelDiv.style.borderRadius = '20px';
+        fieldLabelDiv.style.borderLeft = '3px solid #ffaa33';
+        const fieldLabelObj = new CSS2DObject(fieldLabelDiv);
+        fieldLabelObj.position.set(0, 1.4, 0);
+        scene.add(fieldLabelObj);
+        
+        // Металлический предмет для теста (гайка/шарик)
+        const testObjectMat = new THREE.MeshStandardMaterial({ color: 0xccaa88, metalness: 0.9, roughness: 0.2 });
+        const testSphere = new THREE.Mesh(new THREE.SphereGeometry(0.23, 32, 32), testObjectMat);
+        testSphere.castShadow = true;
+        testSphere.userData = { isTestItem: true, basePos: new THREE.Vector3(1.2, -0.1, 1.0) };
+        testSphere.position.copy(testSphere.userData.basePos);
+        scene.add(testSphere);
+        
+        // анимационный вектор для притяжения (если активно)
+        let isAttracting = false;
+        let attractProgress = 0; // 0..1
+        let attractTargetPos = new THREE.Vector3(0, 0.2, 0.8);
+        
+        // --- Параметры электромагнита ---
+        let isPowered = false;
+        let currentPower = 0.65; // 0-1 scale from 0-100% слайдера
+        
+        // DOM элементы
+        const toggleBtn = document.getElementById('togglePowerBtn');
+        const powerLed = document.getElementById('powerLed');
+        const powerStatusSpan = document.getElementById('powerStatus');
+        const currentSlider = document.getElementById('currentSlider');
+        const currentValSpan = document.getElementById('currentVal');
+        const forceMeterSpan = document.getElementById('forceMeter');
+        const testBtn = document.getElementById('activateTestBtn');
+        
+        // Функция обновления визуальных эффектов и магнитной силы
+        function updateMagneticEffect() {
+            const intensity = isPowered ? currentPower : 0;
+            // Меняем свечение обмотки и частиц
+            const emissionIntensity = intensity * 0.7;
+            const wireEmissive = new THREE.Color(0x882200).multiplyScalar(emissionIntensity);
+            // Обновляем материал катушек (перебираем торусы)
+            magnetGroup.children.forEach(child => {
+                if (child.isMesh && (child.geometry.type === 'TorusGeometry')) {
+                    if (child.material) {
+                        child.material.emissiveIntensity = intensity * 0.6;
+                        child.material.color.setHex(intensity > 0.2 ? 0xdd8844 : 0xcc8844);
+                    }
+                }
+            });
+            // Свечение полюсов
+            const glowIntensity = 0.2 + intensity * 0.7;
+            topGlow.material.emissiveIntensity = intensity * 0.5;
+            topGlow.material.opacity = 0.2 + intensity * 0.4;
+            bottomGlow.material.emissiveIntensity = intensity * 0.5;
+            bottomGlow.material.opacity = 0.2 + intensity * 0.4;
+            
+            // Партиклы: меняем цвет и размер динамически
+            if (intensity > 0.05) {
+                particleMat.color.setHex(0xff8844);
+                particleMat.size = 0.04 + intensity * 0.05;
+                // анимируем партиклы: вращение и небольшое движение (будет в анимации)
+            } else {
+                particleMat.color.setHex(0x886644);
+                particleMat.size = 0.02;
+            }
+            
+            // обновление текстовой метки поля
+            if (intensity > 0.1) {
+                fieldLabelDiv.textContent = `⚡ МАГНИТНОЕ ПОЛЕ АКТИВНО (${Math.round(intensity*100)}%) ⚡`;
+                fieldLabelDiv.style.color = '#ffaa55';
+            } else {
+                fieldLabelDiv.textContent = '🔘 МАГНИТНОЕ ПОЛЕ ОТКЛЮЧЕНО';
+                fieldLabelDiv.style.color = '#aaaacc';
+            }
+            
+            // Расчет отображаемой силы в Ньютонах (условно)
+            const forceNewtons = intensity * 3.2;
+            forceMeterSpan.textContent = forceNewtons.toFixed(2);
+            
+            // Если питание выключено и идет притяжение - сбросить объект
+            if (!isPowered && isAttracting) {
+                isAttracting = false;
+                attractProgress = 0;
+                // вернуть предмет на базу плавно
+                if (testSphere.userData.basePos) {
+                    testSphere.position.lerp(testSphere.userData.basePos, 0.5);
+                } else {
+                    testSphere.position.set(1.2, -0.1, 1.0);
+                }
+            }
+        }
+        
+        // Функция активации теста притяжения (кнопка)
+        function testAttraction() {
+            if (!isPowered) {
+                // Вспышка сообщения через временный CSS2D
+                const warnDiv = document.createElement('div');
+                warnDiv.textContent = '⚠️ Сначала включите электромагнит! ⚠️';
+                warnDiv.style.background = 'rgba(200,50,50,0.8)';
+                warnDiv.style.color = 'white';
+                warnDiv.style.padding = '5px 12px';
+                warnDiv.style.borderRadius = '20px';
+                warnDiv.style.fontSize = '14px';
+                const warnLabel = new CSS2DObject(warnDiv);
+                warnLabel.position.set(0, 1.8, 0);
+                scene.add(warnLabel);
+                setTimeout(() => scene.remove(warnLabel), 1200);
+                return;
+            }
+            if (isAttracting) return; // уже тянет
+            isAttracting = true;
+            attractProgress = 0;
+            // Звуков нет, но визуально притягиваем
+        }
+        
+        // Обновление состояния питания
+        function setPower(state) {
+            isPowered = state;
+            if (isPowered) {
+                powerLed.classList.add('on');
+                powerStatusSpan.textContent = 'ВКЛЮЧЕН';
+                toggleBtn.classList.add('active');
+                toggleBtn.style.background = '#ffaa00';
+                toggleBtn.style.color = '#1e1e2a';
+            } else {
+                powerLed.classList.remove('on');
+                powerStatusSpan.textContent = 'ВЫКЛЮЧЕН';
+                toggleBtn.classList.remove('active');
+                toggleBtn.style.background = '#2c3e66';
+                toggleBtn.style.color = 'white';
+                // сброс притяжения
+                if (isAttracting) {
+                    isAttracting = false;
+                    attractProgress = 0;
+                    testSphere.position.lerp(testSphere.userData.basePos, 0.6);
+                }
+            }
+            updateMagneticEffect();
+        }
+        
+        // Обработчики UI
+        toggleBtn.addEventListener('click', () => {
+            setPower(!isPowered);
+        });
+        
+        currentSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value) / 100;
+            currentPower = val;
+            currentValSpan.textContent = Math.round(val*100) + '%';
+            updateMagneticEffect();
+        });
+        
+        testBtn.addEventListener('click', testAttraction);
+        
+        // Инициализация состояния
+        setPower(false);
+        currentPower = 0.65;
+        currentSlider.value = 65;
+        currentValSpan.textContent = '65%';
+        updateMagneticEffect();
+        
+        // Анимация частиц: вращение и динамика силовых линий
+        let time = 0;
+        // Для имитации движения металла при притяжении
+        function animateAttraction(deltaTime) {
+            if (!isAttracting) return false;
+            const intensity = currentPower;
+            if (!isPowered || intensity <= 0) {
+                isAttracting = false;
+                return false;
+            }
+            // Скорость притяжения зависит от силы тока
+            const speed = 1.5 + intensity * 2.5;
+            attractProgress += deltaTime * speed;
+            if (attractProgress >= 1.0) {
+                attractProgress = 1.0;
+                // Достигли контакта
+                testSphere.position.lerp(attractTargetPos, 1.0);
+                // Через секунду сбросить, чтобы показать отлипание (но для эффекта удержания)
+                if (attractProgress >= 1.0 && isPowered) {
+                    // Задержим и вернем при выключении или повторном нажатии? Можно авто-возврат после 1.5 сек
+                    setTimeout(() => {
+                        if (isAttracting && isPowered) {
+                            // отпустить автоматически для демонстрации, но можно оставить у магнита
+                            isAttracting = false;
+                            attractProgress = 0;
+                            testSphere.position.lerp(testSphere.userData.basePos, 0.5);
+                        }
+                    }, 1800);
+                    isAttracting = false; // завершаем притяжение, но предмет остается у магнита ненадолго
+                }
+                return true;
+            }
+            // интерполяция позиции от базы к магниту
+            const startPos = testSphere.userData.basePos;
+            const endPos = new THREE.Vector3(0, 0.15, 0.6);
+            testSphere.position.lerpVectors(startPos, endPos, attractProgress);
+            return false;
+        }
+        
+        // Колебание частиц и эффект вращения
+        const originalPartPos = [];
+        for (let i = 0; i < particleCount; i++) {
+            const x = particlePositions[i*3];
+            const y = particlePositions[i*3+1];
+            const z = particlePositions[i*3+2];
+            originalPartPos.push(new THREE.Vector3(x, y, z));
+        }
+        
+        // Основной цикл анимации
+        let lastTime = performance.now();
+        function animate() {
+            const now = performance.now();
+            let delta = Math.min(0.033, (now - lastTime) / 1000);
+            lastTime = now;
+            
+            time += delta;
+            // Обновляем частицы: вращение и "пульсация" при включенном поле
+            const intensity = (isPowered ? currentPower : 0);
+            const positionsAttr = particlesGeometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                const orig = originalPartPos[i];
+                // вращение вокруг оси Y со скоростью от поля
+                const angle = time * (0.8 + intensity * 1.5);
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                let x = orig.x;
+                let z = orig.z;
+                // добавляем радиальное смещение в зависимости от интенсивности (эффект "раздвижения")
+                const radialFactor = 1 + intensity * 0.25;
+                const newX = (x * cosA - z * sinA) * radialFactor;
+                const newZ = (x * sinA + z * cosA) * radialFactor;
+                const newY = orig.y + Math.sin(time * 3 + i) * 0.008 * intensity;
+                positionsAttr[i*3] = newX;
+                positionsAttr[i*3+1] = newY;
+                positionsAttr[i*3+2] = newZ;
+            }
+            particlesGeometry.attributes.position.needsUpdate = true;
+            
+            // Дополнительный эффект: сердцевина слегка меняет цвет при сильном поле
+            if (isPowered && currentPower > 0.3) {
+                const glowStrength = 0.2 + currentPower * 0.5;
+                coreMat.emissiveIntensity = glowStrength * 0.3;
+                coreMat.color.setHex(0xcc8866);
+            } else {
+                coreMat.emissiveIntensity = 0;
+                coreMat.color.setHex(0xaaaaaa);
+            }
+            
+            // Притяжение тестового объекта
+            animateAttraction(delta);
+            
+            // Обновить CSS2D и камеру
+            controls.update(); // для орбиты
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        
+        // Запуск
+        animate();
+        
+        // Адаптация под размер окна
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Добавим маленький пояснительный текст в сцену 3D (опоры)
+        const noteDiv = document.createElement('div');
+        noteDiv.textContent = '🔩 Гвоздь-сердечник | Медная катушка | Регулировка тока';
+        noteDiv.style.fontSize = '10px';
+        noteDiv.style.backgroundColor = 'rgba(0,0,0,0.4)';
+        noteDiv.style.padding = '2px 6px';
+        noteDiv.style.borderRadius = '8px';
+        const noteLabel = new CSS2DObject(noteDiv);
+        noteLabel.position.set(1.2, -0.6, 0.9);
+        scene.add(noteLabel);
+        
+        console.log('Симуляция лабораторной работы №5 запущена');
+    </script>
+</body>
+</html>
